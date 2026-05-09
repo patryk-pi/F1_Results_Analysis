@@ -744,4 +744,31 @@ plt.show()
 
 ### TEAMMATE COMPARISON ###
 
+### TEAMMATE COMPARISON PLOT ###
 
+season = 2021
+
+comparisonSeason = teammateComparison[
+    teammateComparison['year'] == season
+]
+
+plt.figure(figsize=(14, 8))
+
+sns.barplot(
+    data=comparisonSeason,
+    x='constructorName',
+    y='avgFinish',
+    hue='driver'
+)
+
+plt.title(f'Average Finish Position by Team - {season}')
+plt.xlabel('Constructor')
+plt.ylabel('Average Finish Position')
+
+# Lower finish position = better
+plt.gca().invert_yaxis()
+
+plt.xticks(rotation=45)
+
+plt.tight_layout()
+plt.show()
