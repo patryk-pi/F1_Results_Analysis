@@ -335,6 +335,38 @@ print(trackAnalysis)
 
 print("*" * 30, '\n')
 
+### POSITION VOLATILITY BY CIRCUIT ###
+
+trackVolatility = (
+    df.groupby('circuitName')
+    .agg(
+        avgPositionChange = (
+            'positionChangeAbs',
+            'mean'
+        ),
+        races = ('raceId', 'nunique')
+    )
+    .sort_values(
+        by = 'avgPositionChange',
+        ascending = False
+    )
+)
+
+print(trackVolatility)
+
+### QUALIFYING IMPORTANCE OVER TIME ###
+
+seasonCorrelation = (
+    df_finished.groupby('year')
+    .apply(
+        lambda x: x['grid'].corr(
+            x['positionOrder']
+        )
+    )
+)
+
+print(seasonCorrelation)
+
 ### 7. VISUALIZATIONS ###
 
 ### DNF IMPACT BY CIRCUIT ###
@@ -464,5 +496,64 @@ winRate.plot(kind='bar')
 plt.title("Win Rate by Grid Position")
 plt.xlabel("Grid Position")
 plt.ylabel("Win Rate (%)")
+
+plt.show()
+
+### POSITION VOLATILITY BY CIRCUIT ###
+
+plot_data = trackVolatility.sort_values(
+    by = 'avgPositionChange',
+    ascending = True
+)
+
+plot_labels = [
+    f"{circuit} ({races} races)"
+
+    for circuit, races in zip(
+        plot_data.index,
+        plot_data['races']
+    )
+]
+
+plt.figure(figsize=(12, 10))
+
+plt.barh(
+    plot_labels,
+    plot_data['avgPositionChange']
+)
+
+plt.xlabel('Average Absolute Position Change')
+
+plt.ylabel('Circuit')
+
+plt.title(
+    'Race Position Volatility by Circuit'
+)
+
+plt.tight_layout()
+
+plt.show()
+
+### QUALIFYING IMPORTANCE OVER TIME ###
+
+plt.figure(figsize=(10, 6))
+
+plt.plot(
+    seasonCorrelation.index,
+    seasonCorrelation.values,
+    marker='o'
+)
+
+plt.xlabel('Season')
+
+plt.ylabel('Grid vs Finish Correlation')
+
+plt.title(
+    'Importance of Qualifying Over Time'
+)
+
+plt.grid(alpha=0.3)
+
+plt.tight_layout()
 
 plt.show()
