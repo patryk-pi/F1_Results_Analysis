@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 ### 1. DATA LOAD ###
 
@@ -415,5 +416,53 @@ plt.title(
 )
 
 plt.tight_layout()
+
+plt.show()
+
+### GRID VS FINISH POSITION DENSITY ###
+
+# Count occurrences HEATMAP
+heatmap_df = df[
+    (df['grid'] > 0) &
+    (df['grid'] <= 20) &
+    (df['positionOrder'] <= 20)
+]
+
+heatmapData = pd.crosstab(
+    heatmap_df['positionOrder'],
+    heatmap_df['grid']
+)
+plt.figure(figsize=(12, 10))
+
+sns.heatmap(
+    heatmapData,
+    cmap='inferno'
+)
+
+plt.title("Grid Position vs Finish Position")
+plt.xlabel("Grid Position")
+plt.ylabel("Finish Position")
+
+plt.gca().invert_yaxis()
+
+plt.show()
+
+### WIN RATE ###
+
+winRate = (
+    df.groupby('grid')['positionOrder']
+      .apply(lambda x: (x == 1).mean() * 100)
+      .sort_index()
+)
+
+winRate = winRate[winRate.index > 0]
+
+plt.figure(figsize=(10, 6))
+
+winRate.plot(kind='bar')
+
+plt.title("Win Rate by Grid Position")
+plt.xlabel("Grid Position")
+plt.ylabel("Win Rate (%)")
 
 plt.show()
