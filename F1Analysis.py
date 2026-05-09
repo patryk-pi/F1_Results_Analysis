@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 ### 1. DATA LOAD ###
 
@@ -148,7 +149,7 @@ print("=== FINAL DATAFRAME ===")
 print(df.shape)
 print("*" * 30, '\n')
 
-## Preprocessing
+## Data Quality Check
 
 # Missing Values
 print("=== MISSING VALUES ===")
@@ -223,41 +224,17 @@ df['driverAge'] = (
     (df['date'] - df['dob']).dt.days / 365.25
 )
 
-# Data Frame for Finishers
-df_finished = df[df['finished']]
+## ANALYTICAL Datasets
+# Finished-only dataframe
+df_finished = df[df['finished']].copy()
 
-### 4. EDA
+### 6. EDA ###
 
-## Grid vs Finish Correlation
-
-# print("=== GRID VS FINISH CORRELATION ===")
-#
-# correlation = df[['grid', 'positionOrder']].corr()
-#
-# print(correlation)
-# print("*" * 30, '\n')
-#
-# ## Grid vs Finish Correlation (circuits)
-# print("=== GRID VS FINISH CORRELATION ON DIFFERENT CIRCUITS ===")
-#
-# trackCorrelation = (
-#     df.groupby('circuitName')
-#     .agg(
-#         correlation=('grid', lambda x:
-#             x.corr(df.loc[x.index, 'positionOrder'])
-#         ),
-#         races=('raceId', 'nunique')
-#     )
-#     .sort_values(by='correlation', ascending=False)
-# )
-#
-# print(trackCorrelation)
-
-### GRID VS FINISH CORRELATION ###
+### OVERALL GRID VS FINISH CORRELATION ###
 
 print("=== GRID VS FINISH CORRELATION ===")
 
-# Overall correlation (all results)
+# Overall correlation (all drivers)
 overallCorrelation = (
     df[['grid', 'positionOrder']]
     .corr()
@@ -266,7 +243,7 @@ overallCorrelation = (
 
 # Finished-only correlation
 finishedCorrelation = (
-    df[df['finished']][['grid', 'positionOrder']]
+    df_finished[['grid', 'positionOrder']]
     .corr()
     .iloc[0, 1]
 )
@@ -276,27 +253,21 @@ print(f"Finished-only correlation: {finishedCorrelation:.3f}")
 
 print("*" * 30, '\n')
 
-
-### GRID VS FINISH CORRELATION BY CIRCUIT ###
+### CIRCUIT-LEVEL CORRELATION ANALYSIS ###
 
 print("=== GRID VS FINISH CORRELATION BY CIRCUIT ===")
-
-import matplotlib.pyplot as plt
-
-# Finished-only dataframe
-df_finished = df[df['finished']].copy()
 
 # Overall correlation by circuit
 overallTrackCorrelation = (
     df.groupby('circuitName')
     .agg(
-        overallCorrelation=(
+        overallCorrelation = (
             'grid',
             lambda x: x.corr(
                 df.loc[x.index, 'positionOrder']
             )
         ),
-        races=('raceId', 'nunique')
+        races = ('raceId', 'nunique')
     )
 )
 
@@ -304,7 +275,7 @@ overallTrackCorrelation = (
 finishedTrackCorrelation = (
     df_finished.groupby('circuitName')
     .agg(
-        finishedCorrelation=(
+        finishedCorrelation = (
             'grid',
             lambda x: x.corr(
                 df_finished.loc[x.index, 'positionOrder']
@@ -314,69 +285,66 @@ finishedTrackCorrelation = (
 )
 
 # DNF statistics by circuit
-
 dnfStats = (
     df.groupby('circuitName')
     .agg(
-        starters=('driverId', 'count'),
-        finishers=('finished', 'sum'),
-        dnfs=('dnf', 'sum')
+        starters = ('driverId', 'count'),
+        finishers = ('finished', 'sum'),
+        dnfs = ('dnf', 'sum')
     )
 )
 
-# DNF rate
+# DNF rate (%)
 dnfStats['dnfRate'] = (
-    dnfStats['dnfs']
-    / dnfStats['starters']
-) * 100
+                              dnfStats['dnfs']
+                              / dnfStats['starters']
+                      ) * 100
 
 # Merge all analyses
-
-trackCorrelation = (
+trackAnalysis = (
     overallTrackCorrelation
     .merge(
         finishedTrackCorrelation,
-        on='circuitName'
+        on = 'circuitName'
     )
     .merge(
         dnfStats,
-        on='circuitName'
+        on = 'circuitName'
     )
 )
 
-# Difference between finished-only and overall correlation
-trackCorrelation['dnfImpact'] = (
-    trackCorrelation['finishedCorrelation']
-    - trackCorrelation['overallCorrelation']
+# DNF impact on correlation
+trackAnalysis['dnfImpact'] = (
+        trackAnalysis['finishedCorrelation']
+        - trackAnalysis['overallCorrelation']
 )
 
-# Sort by DNF impact
-trackCorrelation = (
-    trackCorrelation
+# Final formatting
+trackAnalysis = (
+    trackAnalysis
     .sort_values(
-        by='dnfImpact',
-        ascending=False
+        by = 'dnfImpact',
+        ascending = False
     )
     .round(3)
 )
 
 # Print results
-print(trackCorrelation)
+print(trackAnalysis)
 
 print("*" * 30, '\n')
 
+### 7. VISUALIZATIONS ###
 
-### VISUALIZATION ###
+### DNF IMPACT BY CIRCUIT ###
 
-# Sort ascending for horizontal plot readability
-plot_data = trackCorrelation.sort_values(
-    by='dnfImpact',
-    ascending=True
+# Sort for plotting
+plot_data = trackAnalysis.sort_values(
+    by = 'dnfImpact',
+    ascending = True
 )
 
 # Labels with race count
-# Labels with correct singular/plural
-
 plot_labels = [
     f"{circuit} ({races} race)"
     if races == 1
@@ -389,7 +357,7 @@ plot_labels = [
 ]
 
 # Figure
-plt.figure(figsize=(12, 10))
+plt.figure(figsize = (12, 10))
 
 # Horizontal bar chart
 plt.barh(
@@ -397,7 +365,7 @@ plt.barh(
     plot_data['dnfImpact']
 )
 
-# Axis labels
+# Labels
 plt.xlabel(
     'Finished vs Overall Correlation Difference'
 )
@@ -413,4 +381,39 @@ plt.title(
 plt.tight_layout()
 
 # Show plot
+plt.show()
+
+### FINISHED-ONLY CORRELATION BY CIRCUIT ###
+
+plot_data = trackAnalysis.sort_values(
+    by = 'finishedCorrelation',
+    ascending = True
+)
+
+plot_labels = [
+    f"{circuit} ({races} races)"
+
+    for circuit, races in zip(
+        plot_data.index,
+        plot_data['races']
+    )
+]
+
+plt.figure(figsize = (12, 10))
+
+plt.barh(
+    plot_labels,
+    plot_data['finishedCorrelation']
+)
+
+plt.xlabel('Grid vs Finish Correlation')
+
+plt.ylabel('Circuit')
+
+plt.title(
+    'How Strongly Qualifying Determines Race Result'
+)
+
+plt.tight_layout()
+
 plt.show()
