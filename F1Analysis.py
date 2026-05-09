@@ -214,13 +214,37 @@ print("*" * 30, '\n')
 
 print("=== GRID VS FINISH CORRELATION ON DIFFERENT TRACKS ===")
 
-track_analysis = (
+trackCorrelation = (
     df.groupby('circuitName')
-    .apply(lambda x: pd.Series({
-        'correlation': x['grid'].corr(x['positionOrder']),
-        'races': x['raceId'].nunique()
-    }))
+    .agg(
+        correlation=('grid', lambda x:
+            x.corr(df.loc[x.index, 'positionOrder'])
+        ),
+        races=('raceId', 'nunique')
+    )
     .sort_values(by='correlation', ascending=False)
 )
 
-print(track_analysis)
+print(trackCorrelation)
+
+
+import matplotlib.pyplot as plt
+
+track_analysis_sorted = trackCorrelation.sort_values(
+    by='correlation',
+    ascending=True
+)
+
+plt.figure(figsize=(12, 10))
+
+plt.barh(
+    track_analysis_sorted.index,
+    track_analysis_sorted['correlation']
+)
+
+plt.xlabel('Grid vs Finish Correlation')
+plt.ylabel('Circuit')
+plt.title('How Much Qualifying Determines Race Result')
+
+plt.tight_layout()
+plt.show()
