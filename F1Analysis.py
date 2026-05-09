@@ -125,6 +125,30 @@ print("=== FINAL DATAFRAME ===")
 print(df.shape)
 print("*" * 30, '\n')
 
-### 3. EDA
+## Data Validation
 
+# Missing Values
+print("=== MISSING VALUES ===")
+print(df.isnull().sum())
+print("*" * 30, '\n')
 
+# Duplicates
+duplicates = df.duplicated(
+    subset=['raceId', 'driverId']
+).sum()
+
+print("=== DUPLICATE CHECK ===")
+print(f"Duplicate rows: {duplicates}")
+print("*" * 30, '\n')
+
+# Basic Statistics
+print("=== BASIC STATISTICS ===")
+print(df[['grid', 'positionOrder', 'points']].describe())
+print("*" * 30, '\n')
+
+# Unique Values after Merge
+print("=== UNIQUE Values ===")
+print(f"Drivers: {df['driverId'].nunique()}")
+print(f"Constructors: {df['constructorId'].nunique()}")
+print(f"Races: {df['raceId'].nunique()}")
+print("*" * 30, '\n')
