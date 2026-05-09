@@ -10,9 +10,19 @@ constructors = pd.read_csv("data/constructors.csv")
 qualifying = pd.read_csv("data/qualifying.csv")
 status = pd.read_csv("data/status.csv")
 
+## Rows Check
+print("=== ORIGINAL DATA ===")
+print(f"Results rows: {results.shape[0]}")
+print(f"Races rows: {races.shape[0]}")
+print(f"Drivers rows: {drivers.shape[0]}")
+print(f"Constructors rows: {constructors.shape[0]}")
+print(f"Qualifying rows: {qualifying.shape[0]}")
+print(f"Status rows: {status.shape[0]}")
+print("*" * 30, '\n')
+
 ### 2. DATA PREP ###
 
-## Data Filter
+## Data Filter and Basic Prep
 races_filtered = races[
     (races['year'] >= 2014) &
     (races['year'] <= 2024)
@@ -23,6 +33,20 @@ hybrid_race_ids = races_filtered['raceId']
 results_filtered = results[
     results['raceId'].isin(hybrid_race_ids)
 ]
+
+print("=== HYBRID ERA FILTER ===")
+print(f"Filtered races: {races_filtered.shape[0]}")
+print(f"Filtered results: {results_filtered.shape[0]}")
+print(f"Years: {races_filtered['year'].min()} - {races_filtered['year'].max()}")
+print("*" * 30, '\n')
+
+qualifying = qualifying.rename(columns={
+    'position': 'qualiPosition'
+})
+
+constructors = constructors.rename(columns={
+    'name': 'constructorName'
+})
 
 ## Data Frame Build
 
@@ -42,18 +66,16 @@ df = df.merge(
 
 # Merge - Constructors
 df = df.merge(
-    constructors[['constructorId', 'name']],
+    constructors[['constructorId', 'constructorName']],
     on='constructorId',
-    how='left',
-    suffixes=('', '_constructor')
+    how='left'
 )
 
 # Merge - Qualifying
 df = df.merge(
-    qualifying[['raceId', 'driverId', 'position', 'q1', 'q2', 'q3']],
+    qualifying[['raceId', 'driverId', 'qualiPosition', 'q1', 'q2', 'q3']],
     on=['raceId', 'driverId'],
-    how='left',
-    suffixes=('', '_quali')
+    how='left'
 )
 
 # Merge - Status
@@ -75,7 +97,7 @@ cols = [
     'surname',
 
     'constructorId',
-    'name_constructor',
+    'constructorName',
 
     'grid',
     'positionOrder',
@@ -86,7 +108,7 @@ cols = [
     'fastestLapTime',
     'fastestLapSpeed',
 
-    'position_quali',
+    'qualiPosition',
     'q1',
     'q2',
     'q3',
@@ -95,6 +117,14 @@ cols = [
     'statusId'
 ]
 
-pd.set_option('display.max_columns', None)
 df = df[cols]
-print(df)
+
+pd.set_option('display.max_columns', None)
+
+print("=== FINAL DATAFRAME ===")
+print(df.shape)
+print("*" * 30, '\n')
+
+### 3. EDA
+
+
