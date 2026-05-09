@@ -367,6 +367,135 @@ seasonCorrelation = (
 
 print(seasonCorrelation)
 
+### CONSTRUCTOR RELIABILITY ###
+
+constructorReliability = (
+    df.groupby('constructorName')
+    .agg(
+        dnfRate = ('dnf', 'mean'),
+        races = ('raceId', 'count')
+    )
+)
+
+constructorReliability['dnfRate'] *= 100
+
+print(constructorReliability)
+
+### DRIVER RACECRAFT ANALYSIS ###
+
+driverRacecraft = (
+    df_finished.groupby('surname')
+    .agg(
+        avgGrid=('grid', 'mean'),
+        avgFinish=('positionOrder', 'mean'),
+        races=('raceId', 'count')
+    )
+)
+
+# Minimum sample size
+driverRacecraft = driverRacecraft[
+    driverRacecraft['races'] >= 20
+]
+
+# Racecraft score
+driverRacecraft['racecraftScore'] = (
+    driverRacecraft['avgGrid']
+    - driverRacecraft['avgFinish']
+)
+
+# Sort
+driverRacecraft = (
+    driverRacecraft
+    .sort_values(
+        by='racecraftScore',
+        ascending=False
+    )
+    .round(2)
+)
+
+print(driverRacecraft)
+
+### TEAMMATE COMPARISON ###
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+### TEAMMATE COMPARISON TABLE ###
+
+teammateComparison = (
+    df.groupby(
+        ['year', 'constructorName', 'surname']
+    )
+    .agg(
+        avgFinish=('positionOrder', 'mean'),
+        medianFinish=('positionOrder', 'median'),
+        avgGrid=('grid', 'mean'),
+        races=('raceId', 'count')
+    )
+    .reset_index()
+)
+
+# Remove small samples
+teammateComparison = teammateComparison[
+    teammateComparison['races'] >= 8
+]
+
+# Position gain relative to starting position
+teammateComparison['positionsGained'] = (
+    teammateComparison['avgGrid']
+    - teammateComparison['avgFinish']
+)
+
+# Difference to teammate average
+teamAverage = (
+    teammateComparison.groupby(
+        ['year', 'constructorName']
+    )['avgFinish']
+    .transform('mean')
+)
+
+# Positive = better than teammate
+teammateComparison['vsTeammate'] = (
+    teamAverage
+    - teammateComparison['avgFinish']
+)
+
+# Round values
+teammateComparison = teammateComparison.round(2)
+
+# Better readability
+teammateComparison = teammateComparison.rename(
+    columns={
+        'surname': 'driver'
+    }
+)
+
+# Sort INSIDE seasons and teams
+teammateComparison = teammateComparison.sort_values(
+    ['year', 'constructorName', 'avgFinish']
+)
+
+# Reorder columns
+teammateComparison = teammateComparison[
+    [
+        'year',
+        'constructorName',
+        'driver',
+        'avgFinish',
+        'medianFinish',
+        'avgGrid',
+        'positionsGained',
+        'vsTeammate',
+        'races'
+    ]
+]
+
+# Reset index for clean display
+teammateComparison = teammateComparison.reset_index(drop=True)
+
+print(teammateComparison)
+
 ### 7. VISUALIZATIONS ###
 
 ### DNF IMPACT BY CIRCUIT ###
@@ -557,3 +686,62 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 
 plt.show()
+
+### CONSTRUCTOR RELIABILITY ###
+
+plot_data = constructorReliability.sort_values(
+    by='dnfRate',
+    ascending=True
+)
+
+plt.figure(figsize=(10, 8))
+
+plt.barh(
+    plot_data.index,
+    plot_data['dnfRate']
+)
+
+plt.xlabel('DNF Rate (%)')
+
+plt.ylabel('Constructor')
+
+plt.title(
+    'Constructor Reliability'
+)
+
+plt.tight_layout()
+
+plt.show()
+
+### DRIVER RACECRAFT ANALYSIS ###
+
+plot_data = (
+    driverRacecraft
+    .head(15)
+    .sort_values(
+        by='racecraftScore'
+    )
+)
+
+plt.figure(figsize=(10, 8))
+
+plt.barh(
+    plot_data.index,
+    plot_data['racecraftScore']
+)
+
+plt.xlabel('Racecraft Score')
+
+plt.ylabel('Driver')
+
+plt.title(
+    'Drivers Gaining Most Positions Relative to Grid'
+)
+
+plt.tight_layout()
+
+plt.show()
+
+### TEAMMATE COMPARISON ###
+
+
