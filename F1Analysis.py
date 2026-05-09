@@ -313,31 +313,52 @@ finishedTrackCorrelation = (
     )
 )
 
-# Merge analyses
-trackCorrelation = overallTrackCorrelation.merge(
-    finishedTrackCorrelation,
-    on='circuitName'
+# DNF statistics by circuit
+
+dnfStats = (
+    df.groupby('circuitName')
+    .agg(
+        starters=('driverId', 'count'),
+        finishers=('finished', 'sum'),
+        dnfs=('dnf', 'sum')
+    )
 )
 
-# Correlation difference
-trackCorrelation['correlationDifference'] = (
+# DNF rate
+dnfStats['dnfRate'] = (
+    dnfStats['dnfs']
+    / dnfStats['starters']
+) * 100
+
+# Merge all analyses
+
+trackCorrelation = (
+    overallTrackCorrelation
+    .merge(
+        finishedTrackCorrelation,
+        on='circuitName'
+    )
+    .merge(
+        dnfStats,
+        on='circuitName'
+    )
+)
+
+# Difference between finished-only and overall correlation
+trackCorrelation['dnfImpact'] = (
     trackCorrelation['finishedCorrelation']
     - trackCorrelation['overallCorrelation']
 )
 
-# Minimum race filter
-trackCorrelation = trackCorrelation[
-    trackCorrelation['races'] >= 5
-]
-
-# Sort by difference
-trackCorrelation = trackCorrelation.sort_values(
-    by='correlationDifference',
-    ascending=False
+# Sort by DNF impact
+trackCorrelation = (
+    trackCorrelation
+    .sort_values(
+        by='dnfImpact',
+        ascending=False
+    )
+    .round(3)
 )
-
-# Round values for readability
-trackCorrelation = trackCorrelation.round(3)
 
 # Print results
 print(trackCorrelation)
@@ -347,27 +368,43 @@ print("*" * 30, '\n')
 
 ### VISUALIZATION ###
 
-# Sort for plotting
+# Sort ascending for horizontal plot readability
 plot_data = trackCorrelation.sort_values(
-    by='correlationDifference',
+    by='dnfImpact',
     ascending=True
 )
 
+# Labels with race count
+# Labels with correct singular/plural
+
+plot_labels = [
+    f"{circuit} ({races} race)"
+    if races == 1
+    else f"{circuit} ({races} races)"
+
+    for circuit, races in zip(
+        plot_data.index,
+        plot_data['races']
+    )
+]
+
+# Figure
 plt.figure(figsize=(12, 10))
 
-# Bar plot
+# Horizontal bar chart
 plt.barh(
-    plot_data.index,
-    plot_data['correlationDifference']
+    plot_labels,
+    plot_data['dnfImpact']
 )
 
-# Labels
+# Axis labels
 plt.xlabel(
     'Finished vs Overall Correlation Difference'
 )
 
 plt.ylabel('Circuit')
 
+# Title
 plt.title(
     'Impact of DNFs on Grid-to-Finish Correlation'
 )
@@ -377,4 +414,3 @@ plt.tight_layout()
 
 # Show plot
 plt.show()
-
