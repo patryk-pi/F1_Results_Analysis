@@ -9,6 +9,7 @@ drivers = pd.read_csv("data/drivers.csv")
 constructors = pd.read_csv("data/constructors.csv")
 qualifying = pd.read_csv("data/qualifying.csv")
 status = pd.read_csv("data/status.csv")
+circuits = pd.read_csv("data/circuits.csv")
 
 ## Rows Check
 print("=== ORIGINAL DATA ===")
@@ -18,6 +19,7 @@ print(f"Drivers rows: {drivers.shape[0]}")
 print(f"Constructors rows: {constructors.shape[0]}")
 print(f"Qualifying rows: {qualifying.shape[0]}")
 print(f"Status rows: {status.shape[0]}")
+print(f"Circuits rows: {circuits.shape[0]}")
 print("*" * 30, '\n')
 
 ### 2. DATA PREP ###
@@ -48,11 +50,17 @@ constructors = constructors.rename(columns={
     'name': 'constructorName'
 })
 
+circuits = circuits.rename(columns={
+    'name': 'circuitName'
+})
+
+
+
 ## Data Frame Build
 
 # Merge - Races
 df = results_filtered.merge(
-    races_filtered[['raceId', 'year', 'name', 'date']],
+    races_filtered[['raceId', 'year', 'name', 'date', 'circuitId']],
     on='raceId',
     how='left'
 )
@@ -85,12 +93,25 @@ df = df.merge(
     how='left'
 )
 
+# Merge - Circuits
+
+df = df.merge(
+    circuits[['circuitId', 'circuitName']],
+    on='circuitId',
+    how='left'
+)
+
+
+
 # Columns selection
 cols = [
     'raceId',
     'year',
     'name',
     'date',
+
+    'circuitId',
+    'circuitName',
 
     'driverId',
     'forename',
@@ -183,3 +204,23 @@ df['driverAge'] = (
 )
 
 ### 4. EDA
+
+print("=== GRID VS FINISH CORRELATION ===")
+
+correlation = df[['grid', 'positionOrder']].corr()
+
+print(correlation)
+print("*" * 30, '\n')
+
+print("=== GRID VS FINISH CORRELATION ON DIFFERENT TRACKS ===")
+
+track_analysis = (
+    df.groupby('circuitName')
+    .apply(lambda x: pd.Series({
+        'correlation': x['grid'].corr(x['positionOrder']),
+        'races': x['raceId'].nunique()
+    }))
+    .sort_values(by='correlation', ascending=False)
+)
+
+print(track_analysis)
