@@ -95,6 +95,7 @@ cols = [
     'driverId',
     'forename',
     'surname',
+    'dob',
 
     'constructorId',
     'constructorName',
@@ -125,7 +126,7 @@ print("=== FINAL DATAFRAME ===")
 print(df.shape)
 print("*" * 30, '\n')
 
-## Data Validation
+## Preprocessing
 
 # Missing Values
 print("=== MISSING VALUES ===")
@@ -152,3 +153,33 @@ print(f"Drivers: {df['driverId'].nunique()}")
 print(f"Constructors: {df['constructorId'].nunique()}")
 print(f"Races: {df['raceId'].nunique()}")
 print("*" * 30, '\n')
+
+### 3. Feature engineering
+
+# Podium finish
+df['podium'] = df['positionOrder'] <= 3
+
+# Points finish
+df['pointsFinish'] = df['points'] > 0
+
+# Places gained
+df['placesGained'] = df['grid'] - df['positionOrder']
+
+# Pole Position
+df['polePosition'] = df['grid'] == 1
+
+# Win
+df['raceWin'] = df['positionOrder'] == 1
+
+# Front Row Start
+df['frontRowStart'] = df['grid'] <= 2
+
+# Age of driver
+df['date'] = pd.to_datetime(df['date'])
+df['dob'] = pd.to_datetime(df['dob'])
+
+df['driverAge'] = (
+    (df['date'] - df['dob']).dt.days / 365.25
+)
+
+### 4. EDA
