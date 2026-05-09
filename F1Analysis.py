@@ -139,6 +139,7 @@ cols = [
     'statusId'
 ]
 
+# MAIN DATA FRAME
 df = df[cols]
 
 pd.set_option('display.max_columns', None)
@@ -177,14 +178,33 @@ print("*" * 30, '\n')
 
 ### 3. Feature engineering
 
-# Podium finish
+# Finished
+df['finished'] = (
+    df['status'].str.contains(r'Finished|\+\d+ Laps?', regex=True)
+)
+
+# DNF
+df['dnf'] = ~df['finished']
+
+# Values Check
+pd.set_option('display.max_rows', None)
+print(df[['status', 'finished']]
+      .drop_duplicates()
+      .sort_values('finished'))
+
+# Podium Finish
 df['podium'] = df['positionOrder'] <= 3
 
-# Points finish
+# Points Finish
 df['pointsFinish'] = df['points'] > 0
 
-# Places gained
+# Places Gained
 df['placesGained'] = df['grid'] - df['positionOrder']
+
+# Absolute Position Change
+df['positionChangeAbs'] = (
+    abs(df['grid'] - df['positionOrder'])
+)
 
 # Pole Position
 df['polePosition'] = df['grid'] == 1
@@ -195,7 +215,7 @@ df['raceWin'] = df['positionOrder'] == 1
 # Front Row Start
 df['frontRowStart'] = df['grid'] <= 2
 
-# Age of driver
+# Age of Driver
 df['date'] = pd.to_datetime(df['date'])
 df['dob'] = pd.to_datetime(df['dob'])
 
@@ -203,48 +223,158 @@ df['driverAge'] = (
     (df['date'] - df['dob']).dt.days / 365.25
 )
 
+# Data Frame for Finishers
+df_finished = df[df['finished']]
+
 ### 4. EDA
+
+## Grid vs Finish Correlation
+
+# print("=== GRID VS FINISH CORRELATION ===")
+#
+# correlation = df[['grid', 'positionOrder']].corr()
+#
+# print(correlation)
+# print("*" * 30, '\n')
+#
+# ## Grid vs Finish Correlation (circuits)
+# print("=== GRID VS FINISH CORRELATION ON DIFFERENT CIRCUITS ===")
+#
+# trackCorrelation = (
+#     df.groupby('circuitName')
+#     .agg(
+#         correlation=('grid', lambda x:
+#             x.corr(df.loc[x.index, 'positionOrder'])
+#         ),
+#         races=('raceId', 'nunique')
+#     )
+#     .sort_values(by='correlation', ascending=False)
+# )
+#
+# print(trackCorrelation)
+
+### GRID VS FINISH CORRELATION ###
 
 print("=== GRID VS FINISH CORRELATION ===")
 
-correlation = df[['grid', 'positionOrder']].corr()
-
-print(correlation)
-print("*" * 30, '\n')
-
-print("=== GRID VS FINISH CORRELATION ON DIFFERENT TRACKS ===")
-
-trackCorrelation = (
-    df.groupby('circuitName')
-    .agg(
-        correlation=('grid', lambda x:
-            x.corr(df.loc[x.index, 'positionOrder'])
-        ),
-        races=('raceId', 'nunique')
-    )
-    .sort_values(by='correlation', ascending=False)
+# Overall correlation (all results)
+overallCorrelation = (
+    df[['grid', 'positionOrder']]
+    .corr()
+    .iloc[0, 1]
 )
 
-print(trackCorrelation)
+# Finished-only correlation
+finishedCorrelation = (
+    df[df['finished']][['grid', 'positionOrder']]
+    .corr()
+    .iloc[0, 1]
+)
 
+print(f"Overall correlation: {overallCorrelation:.3f}")
+print(f"Finished-only correlation: {finishedCorrelation:.3f}")
+
+print("*" * 30, '\n')
+
+
+### GRID VS FINISH CORRELATION BY CIRCUIT ###
+
+print("=== GRID VS FINISH CORRELATION BY CIRCUIT ===")
 
 import matplotlib.pyplot as plt
 
-track_analysis_sorted = trackCorrelation.sort_values(
-    by='correlation',
+# Finished-only dataframe
+df_finished = df[df['finished']].copy()
+
+# Overall correlation by circuit
+overallTrackCorrelation = (
+    df.groupby('circuitName')
+    .agg(
+        overallCorrelation=(
+            'grid',
+            lambda x: x.corr(
+                df.loc[x.index, 'positionOrder']
+            )
+        ),
+        races=('raceId', 'nunique')
+    )
+)
+
+# Finished-only correlation by circuit
+finishedTrackCorrelation = (
+    df_finished.groupby('circuitName')
+    .agg(
+        finishedCorrelation=(
+            'grid',
+            lambda x: x.corr(
+                df_finished.loc[x.index, 'positionOrder']
+            )
+        )
+    )
+)
+
+# Merge analyses
+trackCorrelation = overallTrackCorrelation.merge(
+    finishedTrackCorrelation,
+    on='circuitName'
+)
+
+# Correlation difference
+trackCorrelation['correlationDifference'] = (
+    trackCorrelation['finishedCorrelation']
+    - trackCorrelation['overallCorrelation']
+)
+
+# Minimum race filter
+trackCorrelation = trackCorrelation[
+    trackCorrelation['races'] >= 5
+]
+
+# Sort by difference
+trackCorrelation = trackCorrelation.sort_values(
+    by='correlationDifference',
+    ascending=False
+)
+
+# Round values for readability
+trackCorrelation = trackCorrelation.round(3)
+
+# Print results
+print(trackCorrelation)
+
+print("*" * 30, '\n')
+
+
+### VISUALIZATION ###
+
+# Sort for plotting
+plot_data = trackCorrelation.sort_values(
+    by='correlationDifference',
     ascending=True
 )
 
 plt.figure(figsize=(12, 10))
 
+# Bar plot
 plt.barh(
-    track_analysis_sorted.index,
-    track_analysis_sorted['correlation']
+    plot_data.index,
+    plot_data['correlationDifference']
 )
 
-plt.xlabel('Grid vs Finish Correlation')
-plt.ylabel('Circuit')
-plt.title('How Much Qualifying Determines Race Result')
+# Labels
+plt.xlabel(
+    'Finished vs Overall Correlation Difference'
+)
 
+plt.ylabel('Circuit')
+
+plt.title(
+    'Impact of DNFs on Grid-to-Finish Correlation'
+)
+
+# Layout
 plt.tight_layout()
+
+# Show plot
 plt.show()
+
