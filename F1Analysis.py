@@ -362,6 +362,23 @@ print(f"Finished-only correlation: {finishedCorrelation:.3f}")
 
 print("*" * 30, '\n')
 
+### NUMERICAL CORRELATION MATRIX ###
+
+correlationFeatures = [
+    'grid',
+    'positionOrder',
+    'laps',
+    'driverAge',
+    'placesGained',
+    'performanceDelta'
+]
+
+correlationMatrix = (
+    df[correlationFeatures]
+    .corr()
+    .round(2)
+)
+
 ### CIRCUIT-LEVEL CORRELATION ANALYSIS ###
 
 print("=== GRID VS FINISH CORRELATION BY CIRCUIT ===")
@@ -462,6 +479,8 @@ trackVolatility = (
 
 print(trackVolatility)
 
+
+
 ### QUALIFYING IMPORTANCE OVER TIME ###
 
 seasonCorrelation = (
@@ -489,6 +508,19 @@ constructorReliability = (
 constructorReliability[
     ['mechanicalDnfRate', 'incidentDnfRate']
 ] *= 100
+
+### CONSTRUCTOR PERFORMANCE OVER TIME ###
+
+constructorPerformance = (
+    df_finished.groupby(
+        ['year', 'constructorName']
+    )
+    .agg(
+        avgFinish=('positionOrder', 'mean'),
+        points=('points', 'sum')
+    )
+    .reset_index()
+)
 
 ### DRIVER RACECRAFT ANALYSIS ###
 
@@ -563,55 +595,6 @@ driverReliability = (
 )
 
 print(driverReliability)
-
-### DRIVER RISK PROFILE ###
-
-driverRiskProfile = (
-    df.groupby('surname')
-    .agg(
-        races=('raceId', 'count'),
-
-        avgPositionsGained=(
-            'placesGained',
-            'mean'
-        ),
-
-        incidentDnfRate=(
-            'incidentDnf',
-            'mean'
-        ),
-
-        finishRate=(
-            'finished',
-            'mean'
-        )
-    )
-)
-
-# Minimum sample
-driverRiskProfile = driverRiskProfile[
-    driverRiskProfile['races'] >= 20
-]
-
-# Convert to %
-driverRiskProfile[
-    [
-        'incidentDnfRate',
-        'finishRate'
-    ]
-] *= 100
-
-driverRiskProfile = (
-    driverRiskProfile
-    .sort_values(
-        by='avgPositionsGained',
-        ascending=False
-    )
-    .round(2)
-)
-
-print(driverRiskProfile)
-
 
 ### DRIVER RISK VS REWARD PROFILE ###
 
@@ -706,11 +689,6 @@ circuitAnalysis = (
 
 print(circuitAnalysis)
 
-### TEAMMATE COMPARISON ###
-
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 ### TEAMMATE COMPARISON TABLE ###
 
@@ -795,10 +773,12 @@ viz.plot_all_visualizations(
     trackVolatility=trackVolatility,
     seasonCorrelation=seasonCorrelation,
     constructorReliability=constructorReliability,
+    constructorPerformance=constructorPerformance,
     driverRacecraft=driverRacecraft,
     driverReliability=driverReliability,
     circuitAnalysis=circuitAnalysis,
     driverRiskProfile=driverRiskProfile,
     teammateComparison=teammateComparison,
-    season=2021
+    season=2021,
+    correlationMatrix = correlationMatrix
 )

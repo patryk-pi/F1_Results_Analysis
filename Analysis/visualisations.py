@@ -46,6 +46,27 @@ def plot_dnf_impact_by_circuit(trackAnalysis):
 
     plt.show()
 
+### CORRELATION HEATMAP ###
+
+def plot_correlation_heatmap(correlationMatrix):
+
+    plt.figure(figsize=(10, 8))
+
+    sns.heatmap(
+        correlationMatrix,
+        annot=True,
+        cmap='coolwarm',
+        center=0
+    )
+
+    plt.title(
+        'Feature Correlation Matrix'
+    )
+
+    plt.tight_layout()
+
+    plt.show()
+
 
 ### FINISHED-ONLY CORRELATION BY CIRCUIT ###
 
@@ -188,6 +209,62 @@ def plot_position_volatility(trackVolatility):
 
     plt.show()
 
+### POSITION CHANGE DISTRIBUTION BY CIRCUIT ###
+
+def plot_position_change_boxplot(df):
+
+    # Minimum sample size
+    circuitCounts = (
+        df.groupby('circuitName')['raceId']
+        .nunique()
+    )
+
+    validCircuits = circuitCounts[
+        circuitCounts >= 5
+    ].index
+
+    # Filter dataframe
+    plot_df = df[
+        df['circuitName']
+        .isin(validCircuits)
+    ]
+
+    # Sort by median volatility
+    circuitOrder = (
+        plot_df.groupby('circuitName')['positionChangeAbs']
+        .median()
+        .sort_values()
+        .index
+    )
+
+    plt.figure(figsize=(16, 8))
+
+    sns.boxplot(
+        data=plot_df,
+        x='circuitName',
+        y='positionChangeAbs',
+        order=circuitOrder
+    )
+
+    plt.xticks(
+        rotation=45,
+        ha='right'
+    )
+
+    plt.xlabel('Circuit')
+
+    plt.ylabel(
+        'Absolute Position Change'
+    )
+
+    plt.title(
+        'Race Position Volatility by Circuit'
+    )
+
+    plt.tight_layout()
+
+    plt.show()
+
 
 ### QUALIFYING IMPORTANCE OVER TIME ###
 
@@ -218,7 +295,6 @@ def plot_qualifying_importance_over_time(
     plt.tight_layout()
 
     plt.show()
-
 
 ### CONSTRUCTOR RELIABILITY ###
 
@@ -255,6 +331,49 @@ def plot_constructor_reliability(
     )
 
     plt.legend()
+
+    plt.tight_layout()
+
+    plt.show()
+
+### CONSTRUCTOR PERFORMANCE TREND ###
+
+def plot_constructor_performance_trend(
+    constructorPerformance
+):
+
+    topConstructors = (
+        constructorPerformance.groupby(
+            'constructorName'
+        )['points']
+        .sum()
+        .sort_values(ascending=False)
+        .head(6)
+        .index
+    )
+
+    plot_df = constructorPerformance[
+        constructorPerformance['constructorName']
+        .isin(topConstructors)
+    ]
+
+    plt.figure(figsize=(12, 8))
+
+    sns.lineplot(
+        data=plot_df,
+        x='year',
+        y='avgFinish',
+        hue='constructorName',
+        marker='o'
+    )
+
+    plt.gca().invert_yaxis()
+
+    plt.title(
+        'Constructor Performance Over Time'
+    )
+
+    plt.ylabel('Average Finish Position')
 
     plt.tight_layout()
 
@@ -465,13 +584,16 @@ def plot_all_visualizations(
     df,
     trackVolatility,
     seasonCorrelation,
+    constructorPerformance,
     constructorReliability,
     driverRacecraft,
     driverReliability,
     circuitAnalysis,
     driverRiskProfile,
     teammateComparison,
+    correlationMatrix,
     season=2021
+
 ):
 
     plot_dnf_impact_by_circuit(
@@ -484,6 +606,10 @@ def plot_all_visualizations(
 
     plot_grid_vs_finish_density(
         df
+    )
+
+    plot_correlation_heatmap(
+        correlationMatrix
     )
 
     plot_win_rate(
@@ -500,6 +626,10 @@ def plot_all_visualizations(
 
     plot_constructor_reliability(
         constructorReliability
+    )
+
+    plot_constructor_performance_trend(
+        constructorPerformance
     )
 
     plot_driver_racecraft(
@@ -522,3 +652,8 @@ def plot_all_visualizations(
         teammateComparison,
         season
     )
+
+    plot_position_change_boxplot (
+        df
+    )
+
