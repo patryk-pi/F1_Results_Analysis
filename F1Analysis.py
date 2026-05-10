@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import Analysis.visualisations as viz
+import Analysis.eda as eda
 
 ### 1. DATA LOAD ###
 
@@ -337,448 +338,53 @@ df_finished = (
     df[df['finished']]
     .copy()
 )
+##### 6. EDA #####
+
 ### 6. EDA ###
 
-### OVERALL GRID VS FINISH CORRELATION ###
-
-print("=== GRID VS FINISH CORRELATION ===")
-
-# Overall correlation (all drivers)
-overallCorrelation = (
-    df[['grid', 'positionOrder']]
-    .corr()
-    .iloc[0, 1]
+edaResults = eda.run_eda(
+    df,
+    df_finished
 )
-
-# Finished-only correlation
-finishedCorrelation = (
-    df_finished[['grid', 'positionOrder']]
-    .corr()
-    .iloc[0, 1]
-)
-
-print(f"Overall correlation: {overallCorrelation:.3f}")
-print(f"Finished-only correlation: {finishedCorrelation:.3f}")
-
-print("*" * 30, '\n')
-
-### NUMERICAL CORRELATION MATRIX ###
-
-correlationFeatures = [
-    'grid',
-    'positionOrder',
-    'laps',
-    'driverAge',
-    'placesGained',
-    'performanceDelta'
-]
-
-correlationMatrix = (
-    df[correlationFeatures]
-    .corr()
-    .round(2)
-)
-
-### CIRCUIT-LEVEL CORRELATION ANALYSIS ###
-
-print("=== GRID VS FINISH CORRELATION BY CIRCUIT ===")
-
-# Overall correlation by circuit
-overallTrackCorrelation = (
-    df.groupby('circuitName')
-    .agg(
-        overallCorrelation = (
-            'grid',
-            lambda x: x.corr(
-                df.loc[x.index, 'positionOrder']
-            )
-        ),
-        races = ('raceId', 'nunique')
-    )
-)
-
-# Finished-only correlation by circuit
-finishedTrackCorrelation = (
-    df_finished.groupby('circuitName')
-    .agg(
-        finishedCorrelation = (
-            'grid',
-            lambda x: x.corr(
-                df_finished.loc[x.index, 'positionOrder']
-            )
-        )
-    )
-)
-
-# DNF statistics by circuit
-dnfStats = (
-    df.groupby('circuitName')
-    .agg(
-        starters = ('driverId', 'count'),
-        finishers = ('finished', 'sum'),
-        dnfs = ('dnf', 'sum')
-    )
-)
-
-# DNF rate (%)
-dnfStats['dnfRate'] = (
-                              dnfStats['dnfs']
-                              / dnfStats['starters']
-                      ) * 100
-
-# Merge all analyses
-trackAnalysis = (
-    overallTrackCorrelation
-    .merge(
-        finishedTrackCorrelation,
-        on = 'circuitName'
-    )
-    .merge(
-        dnfStats,
-        on = 'circuitName'
-    )
-)
-
-# DNF impact on correlation
-trackAnalysis['dnfImpact'] = (
-        trackAnalysis['finishedCorrelation']
-        - trackAnalysis['overallCorrelation']
-)
-
-# Final formatting
-trackAnalysis = (
-    trackAnalysis
-    .sort_values(
-        by = 'dnfImpact',
-        ascending = False
-    )
-    .round(3)
-)
-
-# Print results
-print(trackAnalysis)
-
-print("*" * 30, '\n')
-
-### POSITION VOLATILITY BY CIRCUIT ###
-
-trackVolatility = (
-    df.groupby('circuitName')
-    .agg(
-        avgPositionChange = (
-            'positionChangeAbs',
-            'mean'
-        ),
-        races = ('raceId', 'nunique')
-    )
-    .sort_values(
-        by = 'avgPositionChange',
-        ascending = False
-    )
-)
-
-print(trackVolatility)
-
-
-
-### QUALIFYING IMPORTANCE OVER TIME ###
-
-seasonCorrelation = (
-    df_finished.groupby('year')
-    .apply(
-        lambda x: x['grid'].corr(
-            x['positionOrder']
-        )
-    )
-)
-
-print(seasonCorrelation)
-
-### CONSTRUCTOR RELIABILITY ###
-
-constructorReliability = (
-    df.groupby('constructorName')
-    .agg(
-        mechanicalDnfRate=('mechanicalDnf', 'mean'),
-        incidentDnfRate=('incidentDnf', 'mean'),
-        races=('raceId', 'count')
-    )
-)
-
-constructorReliability[
-    ['mechanicalDnfRate', 'incidentDnfRate']
-] *= 100
-
-### CONSTRUCTOR PERFORMANCE OVER TIME ###
-
-constructorPerformance = (
-    df_finished.groupby(
-        ['year', 'constructorName']
-    )
-    .agg(
-        avgFinish=('positionOrder', 'mean'),
-        points=('points', 'sum')
-    )
-    .reset_index()
-)
-
-### DRIVER RACECRAFT ANALYSIS ###
-
-driverRacecraft = (
-    df_finished.groupby('surname')
-    .agg(
-        avgGrid=('grid', 'mean'),
-        avgFinish=('positionOrder', 'mean'),
-        races=('raceId', 'count')
-    )
-)
-
-# Minimum sample size
-driverRacecraft = driverRacecraft[
-    driverRacecraft['races'] >= 20
-]
-
-# Racecraft score
-driverRacecraft['racecraftScore'] = (
-    driverRacecraft['avgGrid']
-    - driverRacecraft['avgFinish']
-)
-
-# Sort
-driverRacecraft = (
-    driverRacecraft
-    .sort_values(
-        by='racecraftScore',
-        ascending=False
-    )
-    .round(2)
-)
-
-print(driverRacecraft)
-
-### DRIVER DNF Rate ANALYSIS ###
-
-driverReliability = (
-    df.groupby('surname')
-    .agg(
-        races=('raceId', 'count'),
-
-        finishRate=('finished', 'mean'),
-
-        mechanicalDnfRate=('mechanicalDnf', 'mean'),
-
-        incidentDnfRate=('incidentDnf', 'mean')
-    )
-)
-
-## Minimum sample size
-driverReliability = driverReliability[
-    driverReliability['races'] >= 20
-]
-
-## Convert to percentages
-driverReliability[
-    [
-        'finishRate',
-        'mechanicalDnfRate',
-        'incidentDnfRate'
-    ]
-] *= 100
-
-
-driverReliability = (
-    driverReliability.sort_values(
-        by='incidentDnfRate',
-        ascending=False
-    )
-    .round(2)
-)
-
-print(driverReliability)
-
-### DRIVER RISK VS REWARD PROFILE ###
-
-driverRiskProfile = (
-    df.groupby('surname')
-    .agg(
-        races=('raceId', 'count'),
-
-        avgPerformanceDelta=(
-            'performanceDelta',
-            'mean'
-        ),
-
-        incidentDnfRate=(
-            'incidentDnf',
-            'mean'
-        ),
-
-        finishRate=(
-            'finished',
-            'mean'
-        )
-    )
-)
-
-# Minimum sample size
-driverRiskProfile = driverRiskProfile[
-    driverRiskProfile['races'] >= 20
-]
-
-# Convert to percentages
-driverRiskProfile[
-    [
-        'incidentDnfRate',
-        'finishRate'
-    ]
-] *= 100
-
-# Sorting
-driverRiskProfile = (
-    driverRiskProfile
-    .sort_values(
-        by='avgPerformanceDelta',
-        ascending=False
-    )
-    .round(2)
-)
-
-print(driverRiskProfile)
-
-### CIRCUIT DNF ANALYSIS ###
-
-circuitAnalysis = (
-    df.groupby('circuitName')
-    .agg(
-        starters=('driverId', 'count'),
-
-        races=('raceId', 'nunique'),
-
-        mechanicalDnfs=('mechanicalDnf', 'sum'),
-
-        incidentDnfs=('incidentDnf', 'sum'),
-
-        finishers=('finished', 'sum')
-    )
-)
-
-# Rates
-circuitAnalysis['mechanicalDnfRate'] = (
-    circuitAnalysis['mechanicalDnfs']
-    / circuitAnalysis['starters']
-) * 100
-
-circuitAnalysis['incidentDnfRate'] = (
-    circuitAnalysis['incidentDnfs']
-    / circuitAnalysis['starters']
-) * 100
-
-circuitAnalysis['finishRate'] = (
-    circuitAnalysis['finishers']
-    / circuitAnalysis['starters']
-) * 100
-
-circuitAnalysis = (
-    circuitAnalysis
-    .sort_values(
-        by='incidentDnfRate',
-        ascending=False
-    )
-    .round(2)
-)
-
-print(circuitAnalysis)
-
-
-### TEAMMATE COMPARISON TABLE ###
-
-teammateComparison = (
-    df.groupby(
-        ['year', 'constructorName', 'surname']
-    )
-    .agg(
-        avgFinish=('positionOrder', 'mean'),
-        medianFinish=('positionOrder', 'median'),
-        avgGrid=('grid', 'mean'),
-        races=('raceId', 'count')
-    )
-    .reset_index()
-)
-
-# Remove small samples
-teammateComparison = teammateComparison[
-    teammateComparison['races'] >= 8
-]
-
-# Position gain relative to starting position
-teammateComparison['positionsGained'] = (
-    teammateComparison['avgGrid']
-    - teammateComparison['avgFinish']
-)
-
-# Difference to teammate average
-teamAverage = (
-    teammateComparison.groupby(
-        ['year', 'constructorName']
-    )['avgFinish']
-    .transform('mean')
-)
-
-# Positive = better than teammate
-teammateComparison['vsTeammate'] = (
-    teamAverage
-    - teammateComparison['avgFinish']
-)
-
-# Round values
-teammateComparison = teammateComparison.round(2)
-
-# Better readability
-teammateComparison = teammateComparison.rename(
-    columns={
-        'surname': 'driver'
-    }
-)
-
-# Sort INSIDE seasons and teams
-teammateComparison = teammateComparison.sort_values(
-    ['year', 'constructorName', 'avgFinish']
-)
-
-# Reorder columns
-teammateComparison = teammateComparison[
-    [
-        'year',
-        'constructorName',
-        'driver',
-        'avgFinish',
-        'medianFinish',
-        'avgGrid',
-        'positionsGained',
-        'vsTeammate',
-        'races'
-    ]
-]
-
-# Reset index for clean display
-teammateComparison = teammateComparison.reset_index(drop=True)
-
-print(teammateComparison)
 
 ##### 7. VISUALISATIONS #####
 
 viz.plot_all_visualizations(
-    trackAnalysis=trackAnalysis,
+
+    trackAnalysis=
+        edaResults['trackAnalysis'],
+
     df=df,
-    trackVolatility=trackVolatility,
-    seasonCorrelation=seasonCorrelation,
-    constructorReliability=constructorReliability,
-    constructorPerformance=constructorPerformance,
-    driverRacecraft=driverRacecraft,
-    driverReliability=driverReliability,
-    circuitAnalysis=circuitAnalysis,
-    driverRiskProfile=driverRiskProfile,
-    teammateComparison=teammateComparison,
-    season=2021,
-    correlationMatrix = correlationMatrix
+
+    trackVolatility=
+        edaResults['trackVolatility'],
+
+    seasonCorrelation=
+        edaResults['seasonCorrelation'],
+
+    constructorPerformance=
+        edaResults['constructorPerformance'],
+
+    constructorReliability=
+        edaResults['constructorReliability'],
+
+    driverRacecraft=
+        edaResults['driverRacecraft'],
+
+    driverReliability=
+        edaResults['driverReliability'],
+
+    circuitAnalysis=
+        edaResults['circuitAnalysis'],
+
+    driverRiskProfile=
+        edaResults['driverRiskProfile'],
+
+    teammateComparison=
+        edaResults['teammateComparison'],
+
+    correlationMatrix=
+        edaResults['correlationMatrix'],
+
+    season=2021
 )
