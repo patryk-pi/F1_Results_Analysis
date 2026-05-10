@@ -180,12 +180,73 @@ print("*" * 30, '\n')
 
 ### 3. Feature engineering
 
-# Finished
-df['finished'] = (
-    df['status'].str.contains(r'Finished|\+\d+ Laps?', regex=True)
+## Finished
+df['finished'] = df['status'].str.contains(
+    r'Finished|\+\d+ Laps?',
+    regex=True,
+    na=False
 )
 
-# DNF
+## Mechanical DNFs
+mechanicalStatuses = [
+    'Wheel', 'Power loss', 'Differential',
+    'Fuel system', 'Transmission',
+    'Cooling system', 'Tyre', 'Throttle',
+    'Brake duct', 'Hydraulics', 'Battery',
+    'Puncture', 'Overheating', 'Wheel nut',
+    'Vibrations', 'Driveshaft',
+    'Fuel pressure', 'Spark plugs',
+    'Steering', 'Out of fuel',
+    'Radiator', 'Electronics',
+    'Water leak', 'Undertray',
+    'Fuel pump', 'Fuel leak',
+    'ERS', 'Oil pressure',
+    'Engine', 'Technical',
+    'Gearbox', 'Electrical',
+    'Power Unit', 'Brakes',
+    'Clutch', 'Exhaust',
+    'Water pump', 'Mechanical',
+    'Turbo', 'Drivetrain',
+    'Suspension', 'Oil leak',
+    'Water pressure',
+    'Seat'
+]
+
+## Incident DNFs
+incidentStatuses = [
+    'Spun off',
+    'Collision',
+    'Collision damage',
+    'Accident',
+    'Damage',
+    'Debris',
+    'Front wing',
+    'Rear wing'
+]
+
+## Administrative / other
+otherStatuses = [
+    'Excluded',
+    'Disqualified',
+    'Withdrew',
+    'Illness'
+]
+
+## Unknown cause
+unknownStatuses = [
+    'Retired'
+]
+
+## Flags
+df['mechanicalDnf'] = df['status'].isin(mechanicalStatuses)
+
+df['incidentDnf'] = df['status'].isin(incidentStatuses)
+
+df['otherDnf'] = df['status'].isin(otherStatuses)
+
+df['unknownDnf'] = df['status'].isin(unknownStatuses)
+
+## Overall DNF
 df['dnf'] = ~df['finished']
 
 # Values Check
@@ -372,14 +433,15 @@ print(seasonCorrelation)
 constructorReliability = (
     df.groupby('constructorName')
     .agg(
-        dnfRate = ('dnf', 'mean'),
-        races = ('raceId', 'count')
+        mechanicalDnfRate=('mechanicalDnf', 'mean'),
+        incidentDnfRate=('incidentDnf', 'mean'),
+        races=('raceId', 'count')
     )
 )
 
-constructorReliability['dnfRate'] *= 100
-
-print(constructorReliability)
+constructorReliability[
+    ['mechanicalDnfRate', 'incidentDnfRate']
+] *= 100
 
 ### DRIVER RACECRAFT ANALYSIS ###
 
@@ -414,6 +476,56 @@ driverRacecraft = (
 )
 
 print(driverRacecraft)
+
+### DRIVER DNF ANALYSIS ###
+
+driverAnalysis = (
+    df.groupby('surname')
+    .agg(
+        races=('raceId', 'count'),
+
+        finishRate=('finished', 'mean'),
+
+        mechanicalDnfRate=('mechanicalDnf', 'mean'),
+
+        incidentDnfRate=('incidentDnf', 'mean'),
+
+        avgGrid=('grid', 'mean'),
+
+        avgFinish=('positionOrder', 'mean')
+    )
+)
+
+## Minimum sample size
+driverAnalysis = driverAnalysis[
+    driverAnalysis['races'] >= 20
+]
+
+## Convert to percentages
+driverAnalysis[
+    [
+        'finishRate',
+        'mechanicalDnfRate',
+        'incidentDnfRate'
+    ]
+] *= 100
+
+## Racecraft score
+driverAnalysis['racecraftScore'] = (
+    driverAnalysis['avgGrid']
+    - driverAnalysis['avgFinish']
+)
+
+driverAnalysis = (
+    driverAnalysis
+    .sort_values(
+        by='incidentDnfRate',
+        ascending=False
+    )
+    .round(2)
+)
+
+print(driverAnalysis)
 
 ### TEAMMATE COMPARISON ###
 
@@ -689,16 +801,26 @@ plt.show()
 
 ### CONSTRUCTOR RELIABILITY ###
 
+### CONSTRUCTOR RELIABILITY PLOT ###
+
 plot_data = constructorReliability.sort_values(
-    by='dnfRate',
+    by='mechanicalDnfRate',
     ascending=True
 )
 
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(12, 8))
 
 plt.barh(
     plot_data.index,
-    plot_data['dnfRate']
+    plot_data['mechanicalDnfRate'],
+    label='Mechanical DNF Rate'
+)
+
+plt.barh(
+    plot_data.index,
+    plot_data['incidentDnfRate'],
+    left=plot_data['mechanicalDnfRate'],
+    label='Incident DNF Rate'
 )
 
 plt.xlabel('DNF Rate (%)')
@@ -706,8 +828,10 @@ plt.xlabel('DNF Rate (%)')
 plt.ylabel('Constructor')
 
 plt.title(
-    'Constructor Reliability'
+    'Constructor Reliability and Incident Exposure'
 )
+
+plt.legend()
 
 plt.tight_layout()
 
@@ -742,7 +866,35 @@ plt.tight_layout()
 
 plt.show()
 
-### TEAMMATE COMPARISON ###
+### DRIVER INCIDENT DNF RATE ###
+
+plot_data = (
+    driverAnalysis
+    .sort_values(
+        by='incidentDnfRate',
+        ascending=True
+    )
+    .tail(15)
+)
+
+plt.figure(figsize=(12, 8))
+
+plt.barh(
+    plot_data.index,
+    plot_data['incidentDnfRate']
+)
+
+plt.xlabel('Incident DNF Rate (%)')
+
+plt.ylabel('Driver')
+
+plt.title(
+    'Drivers Most Frequently Involved in Incidents'
+)
+
+plt.tight_layout()
+
+plt.show()
 
 ### TEAMMATE COMPARISON PLOT ###
 
