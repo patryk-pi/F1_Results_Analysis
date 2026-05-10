@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import Analysis.visualisations as viz
 
 ### 1. DATA LOAD ###
 
@@ -178,16 +179,18 @@ print(f"Constructors: {df['constructorId'].nunique()}")
 print(f"Races: {df['raceId'].nunique()}")
 print("*" * 30, '\n')
 
-### 3. Feature engineering
+### 3. FEATURE ENGINEERING ###
 
-## Finished
+## RACE STATUS FEATURES ##
+
+# Finished
 df['finished'] = df['status'].str.contains(
     r'Finished|\+\d+ Laps?',
     regex=True,
     na=False
 )
 
-## Mechanical DNFs
+# Mechanical DNFs
 mechanicalStatuses = [
     'Wheel', 'Power loss', 'Differential',
     'Fuel system', 'Transmission',
@@ -209,10 +212,10 @@ mechanicalStatuses = [
     'Turbo', 'Drivetrain',
     'Suspension', 'Oil leak',
     'Water pressure',
-    'Seat'
+    'Seat', 'Retired'
 ]
 
-## Incident DNFs
+# Incident DNFs
 incidentStatuses = [
     'Spun off',
     'Collision',
@@ -224,7 +227,7 @@ incidentStatuses = [
     'Rear wing'
 ]
 
-## Administrative / other
+# Administrative DNFs
 otherStatuses = [
     'Excluded',
     'Disqualified',
@@ -232,64 +235,108 @@ otherStatuses = [
     'Illness'
 ]
 
-## Unknown cause
-unknownStatuses = [
-    'Retired'
-]
+# DNF Flags
+df['mechanicalDnf'] = (
+    df['status']
+    .isin(mechanicalStatuses)
+)
 
-## Flags
-df['mechanicalDnf'] = df['status'].isin(mechanicalStatuses)
+df['incidentDnf'] = (
+    df['status']
+    .isin(incidentStatuses)
+)
 
-df['incidentDnf'] = df['status'].isin(incidentStatuses)
+df['otherDnf'] = (
+    df['status']
+    .isin(otherStatuses)
+)
 
-df['otherDnf'] = df['status'].isin(otherStatuses)
-
-df['unknownDnf'] = df['status'].isin(unknownStatuses)
-
-## Overall DNF
+# Overall DNF
 df['dnf'] = ~df['finished']
 
-# Values Check
-pd.set_option('display.max_rows', None)
-print(df[['status', 'finished']]
-      .drop_duplicates()
-      .sort_values('finished'))
+## PERFORMANCE FEATURES ##
 
 # Podium Finish
-df['podium'] = df['positionOrder'] <= 3
+df['podium'] = (
+    df['positionOrder'] <= 3
+)
 
 # Points Finish
-df['pointsFinish'] = df['points'] > 0
+df['pointsFinish'] = (
+    df['points'] > 0
+)
 
-# Places Gained
-df['placesGained'] = df['grid'] - df['positionOrder']
-
-# Absolute Position Change
-df['positionChangeAbs'] = (
-    abs(df['grid'] - df['positionOrder'])
+# Race Win
+df['raceWin'] = (
+    df['positionOrder'] == 1
 )
 
 # Pole Position
-df['polePosition'] = df['grid'] == 1
-
-# Win
-df['raceWin'] = df['positionOrder'] == 1
+df['polePosition'] = (
+    df['grid'] == 1
+)
 
 # Front Row Start
-df['frontRowStart'] = df['grid'] <= 2
+df['frontRowStart'] = (
+    df['grid'] <= 2
+)
 
-# Age of Driver
+# Places Gained
+df['placesGained'] = (
+    df['grid']
+    - df['positionOrder']
+)
+
+# Absolute Position Change
+df['positionChangeAbs'] = (
+    abs(
+        df['grid']
+        - df['positionOrder']
+    )
+)
+
+## EXPECTED PERFORMANCE FEATURES ##
+
+# Expected finish by grid slot
+expectedFinishByGrid = (
+    df[
+        df['grid'] > 0
+    ]
+    .groupby('grid')['positionOrder']
+    .mean()
+)
+
+# Expected finish position
+df['expectedFinish'] = (
+    df['grid']
+    .map(expectedFinishByGrid)
+)
+
+# Performance vs expectation
+df['performanceDelta'] = (
+    df['expectedFinish']
+    - df['positionOrder']
+)
+
+## DRIVER FEATURES ##
+
+# Driver age
 df['date'] = pd.to_datetime(df['date'])
+
 df['dob'] = pd.to_datetime(df['dob'])
 
 df['driverAge'] = (
-    (df['date'] - df['dob']).dt.days / 365.25
+    (df['date'] - df['dob']).dt.days
+    / 365.25
 )
 
-## ANALYTICAL Datasets
-# Finished-only dataframe
-df_finished = df[df['finished']].copy()
+## ANALYTICAL DATASETS ##
 
+# Finished-only races
+df_finished = (
+    df[df['finished']]
+    .copy()
+)
 ### 6. EDA ###
 
 ### OVERALL GRID VS FINISH CORRELATION ###
@@ -477,9 +524,9 @@ driverRacecraft = (
 
 print(driverRacecraft)
 
-### DRIVER DNF ANALYSIS ###
+### DRIVER DNF Rate ANALYSIS ###
 
-driverAnalysis = (
+driverReliability = (
     df.groupby('surname')
     .agg(
         races=('raceId', 'count'),
@@ -488,21 +535,17 @@ driverAnalysis = (
 
         mechanicalDnfRate=('mechanicalDnf', 'mean'),
 
-        incidentDnfRate=('incidentDnf', 'mean'),
-
-        avgGrid=('grid', 'mean'),
-
-        avgFinish=('positionOrder', 'mean')
+        incidentDnfRate=('incidentDnf', 'mean')
     )
 )
 
 ## Minimum sample size
-driverAnalysis = driverAnalysis[
-    driverAnalysis['races'] >= 20
+driverReliability = driverReliability[
+    driverReliability['races'] >= 20
 ]
 
 ## Convert to percentages
-driverAnalysis[
+driverReliability[
     [
         'finishRate',
         'mechanicalDnfRate',
@@ -510,14 +553,150 @@ driverAnalysis[
     ]
 ] *= 100
 
-## Racecraft score
-driverAnalysis['racecraftScore'] = (
-    driverAnalysis['avgGrid']
-    - driverAnalysis['avgFinish']
+
+driverReliability = (
+    driverReliability.sort_values(
+        by='incidentDnfRate',
+        ascending=False
+    )
+    .round(2)
 )
 
-driverAnalysis = (
-    driverAnalysis
+print(driverReliability)
+
+### DRIVER RISK PROFILE ###
+
+driverRiskProfile = (
+    df.groupby('surname')
+    .agg(
+        races=('raceId', 'count'),
+
+        avgPositionsGained=(
+            'placesGained',
+            'mean'
+        ),
+
+        incidentDnfRate=(
+            'incidentDnf',
+            'mean'
+        ),
+
+        finishRate=(
+            'finished',
+            'mean'
+        )
+    )
+)
+
+# Minimum sample
+driverRiskProfile = driverRiskProfile[
+    driverRiskProfile['races'] >= 20
+]
+
+# Convert to %
+driverRiskProfile[
+    [
+        'incidentDnfRate',
+        'finishRate'
+    ]
+] *= 100
+
+driverRiskProfile = (
+    driverRiskProfile
+    .sort_values(
+        by='avgPositionsGained',
+        ascending=False
+    )
+    .round(2)
+)
+
+print(driverRiskProfile)
+
+
+### DRIVER RISK VS REWARD PROFILE ###
+
+driverRiskProfile = (
+    df.groupby('surname')
+    .agg(
+        races=('raceId', 'count'),
+
+        avgPerformanceDelta=(
+            'performanceDelta',
+            'mean'
+        ),
+
+        incidentDnfRate=(
+            'incidentDnf',
+            'mean'
+        ),
+
+        finishRate=(
+            'finished',
+            'mean'
+        )
+    )
+)
+
+# Minimum sample size
+driverRiskProfile = driverRiskProfile[
+    driverRiskProfile['races'] >= 20
+]
+
+# Convert to percentages
+driverRiskProfile[
+    [
+        'incidentDnfRate',
+        'finishRate'
+    ]
+] *= 100
+
+# Sorting
+driverRiskProfile = (
+    driverRiskProfile
+    .sort_values(
+        by='avgPerformanceDelta',
+        ascending=False
+    )
+    .round(2)
+)
+
+print(driverRiskProfile)
+
+### CIRCUIT DNF ANALYSIS ###
+
+circuitAnalysis = (
+    df.groupby('circuitName')
+    .agg(
+        starters=('driverId', 'count'),
+
+        races=('raceId', 'nunique'),
+
+        mechanicalDnfs=('mechanicalDnf', 'sum'),
+
+        incidentDnfs=('incidentDnf', 'sum'),
+
+        finishers=('finished', 'sum')
+    )
+)
+
+# Rates
+circuitAnalysis['mechanicalDnfRate'] = (
+    circuitAnalysis['mechanicalDnfs']
+    / circuitAnalysis['starters']
+) * 100
+
+circuitAnalysis['incidentDnfRate'] = (
+    circuitAnalysis['incidentDnfs']
+    / circuitAnalysis['starters']
+) * 100
+
+circuitAnalysis['finishRate'] = (
+    circuitAnalysis['finishers']
+    / circuitAnalysis['starters']
+) * 100
+
+circuitAnalysis = (
+    circuitAnalysis
     .sort_values(
         by='incidentDnfRate',
         ascending=False
@@ -525,7 +704,7 @@ driverAnalysis = (
     .round(2)
 )
 
-print(driverAnalysis)
+print(circuitAnalysis)
 
 ### TEAMMATE COMPARISON ###
 
@@ -608,319 +787,18 @@ teammateComparison = teammateComparison.reset_index(drop=True)
 
 print(teammateComparison)
 
-### 7. VISUALIZATIONS ###
+##### 7. VISUALISATIONS #####
 
-### DNF IMPACT BY CIRCUIT ###
-
-# Sort for plotting
-plot_data = trackAnalysis.sort_values(
-    by = 'dnfImpact',
-    ascending = True
+viz.plot_all_visualizations(
+    trackAnalysis=trackAnalysis,
+    df=df,
+    trackVolatility=trackVolatility,
+    seasonCorrelation=seasonCorrelation,
+    constructorReliability=constructorReliability,
+    driverRacecraft=driverRacecraft,
+    driverReliability=driverReliability,
+    circuitAnalysis=circuitAnalysis,
+    driverRiskProfile=driverRiskProfile,
+    teammateComparison=teammateComparison,
+    season=2021
 )
-
-# Labels with race count
-plot_labels = [
-    f"{circuit} ({races} race)"
-    if races == 1
-    else f"{circuit} ({races} races)"
-
-    for circuit, races in zip(
-        plot_data.index,
-        plot_data['races']
-    )
-]
-
-# Figure
-plt.figure(figsize = (12, 10))
-
-# Horizontal bar chart
-plt.barh(
-    plot_labels,
-    plot_data['dnfImpact']
-)
-
-# Labels
-plt.xlabel(
-    'Finished vs Overall Correlation Difference'
-)
-
-plt.ylabel('Circuit')
-
-# Title
-plt.title(
-    'Impact of DNFs on Grid-to-Finish Correlation'
-)
-
-# Layout
-plt.tight_layout()
-
-# Show plot
-plt.show()
-
-### FINISHED-ONLY CORRELATION BY CIRCUIT ###
-
-plot_data = trackAnalysis.sort_values(
-    by = 'finishedCorrelation',
-    ascending = True
-)
-
-plot_labels = [
-    f"{circuit} ({races} races)"
-
-    for circuit, races in zip(
-        plot_data.index,
-        plot_data['races']
-    )
-]
-
-plt.figure(figsize = (12, 10))
-
-plt.barh(
-    plot_labels,
-    plot_data['finishedCorrelation']
-)
-
-plt.xlabel('Grid vs Finish Correlation')
-
-plt.ylabel('Circuit')
-
-plt.title(
-    'How Strongly Qualifying Determines Race Result'
-)
-
-plt.tight_layout()
-
-plt.show()
-
-### GRID VS FINISH POSITION DENSITY ###
-
-# Count occurrences HEATMAP
-heatmap_df = df[
-    (df['grid'] > 0) &
-    (df['grid'] <= 20) &
-    (df['positionOrder'] <= 20)
-]
-
-heatmapData = pd.crosstab(
-    heatmap_df['positionOrder'],
-    heatmap_df['grid']
-)
-plt.figure(figsize=(12, 10))
-
-sns.heatmap(
-    heatmapData,
-    cmap='inferno'
-)
-
-plt.title("Grid Position vs Finish Position")
-plt.xlabel("Grid Position")
-plt.ylabel("Finish Position")
-
-plt.gca().invert_yaxis()
-
-plt.show()
-
-### WIN RATE ###
-
-winRate = (
-    df.groupby('grid')['positionOrder']
-      .apply(lambda x: (x == 1).mean() * 100)
-      .sort_index()
-)
-
-winRate = winRate[winRate.index > 0]
-
-plt.figure(figsize=(10, 6))
-
-winRate.plot(kind='bar')
-
-plt.title("Win Rate by Grid Position")
-plt.xlabel("Grid Position")
-plt.ylabel("Win Rate (%)")
-
-plt.show()
-
-### POSITION VOLATILITY BY CIRCUIT ###
-
-plot_data = trackVolatility.sort_values(
-    by = 'avgPositionChange',
-    ascending = True
-)
-
-plot_labels = [
-    f"{circuit} ({races} races)"
-
-    for circuit, races in zip(
-        plot_data.index,
-        plot_data['races']
-    )
-]
-
-plt.figure(figsize=(12, 10))
-
-plt.barh(
-    plot_labels,
-    plot_data['avgPositionChange']
-)
-
-plt.xlabel('Average Absolute Position Change')
-
-plt.ylabel('Circuit')
-
-plt.title(
-    'Race Position Volatility by Circuit'
-)
-
-plt.tight_layout()
-
-plt.show()
-
-### QUALIFYING IMPORTANCE OVER TIME ###
-
-plt.figure(figsize=(10, 6))
-
-plt.plot(
-    seasonCorrelation.index,
-    seasonCorrelation.values,
-    marker='o'
-)
-
-plt.xlabel('Season')
-
-plt.ylabel('Grid vs Finish Correlation')
-
-plt.title(
-    'Importance of Qualifying Over Time'
-)
-
-plt.grid(alpha=0.3)
-
-plt.tight_layout()
-
-plt.show()
-
-### CONSTRUCTOR RELIABILITY ###
-
-### CONSTRUCTOR RELIABILITY PLOT ###
-
-plot_data = constructorReliability.sort_values(
-    by='mechanicalDnfRate',
-    ascending=True
-)
-
-plt.figure(figsize=(12, 8))
-
-plt.barh(
-    plot_data.index,
-    plot_data['mechanicalDnfRate'],
-    label='Mechanical DNF Rate'
-)
-
-plt.barh(
-    plot_data.index,
-    plot_data['incidentDnfRate'],
-    left=plot_data['mechanicalDnfRate'],
-    label='Incident DNF Rate'
-)
-
-plt.xlabel('DNF Rate (%)')
-
-plt.ylabel('Constructor')
-
-plt.title(
-    'Constructor Reliability and Incident Exposure'
-)
-
-plt.legend()
-
-plt.tight_layout()
-
-plt.show()
-
-### DRIVER RACECRAFT ANALYSIS ###
-
-plot_data = (
-    driverRacecraft
-    .head(15)
-    .sort_values(
-        by='racecraftScore'
-    )
-)
-
-plt.figure(figsize=(10, 8))
-
-plt.barh(
-    plot_data.index,
-    plot_data['racecraftScore']
-)
-
-plt.xlabel('Racecraft Score')
-
-plt.ylabel('Driver')
-
-plt.title(
-    'Drivers Gaining Most Positions Relative to Grid'
-)
-
-plt.tight_layout()
-
-plt.show()
-
-### DRIVER INCIDENT DNF RATE ###
-
-plot_data = (
-    driverAnalysis
-    .sort_values(
-        by='incidentDnfRate',
-        ascending=True
-    )
-    .tail(15)
-)
-
-plt.figure(figsize=(12, 8))
-
-plt.barh(
-    plot_data.index,
-    plot_data['incidentDnfRate']
-)
-
-plt.xlabel('Incident DNF Rate (%)')
-
-plt.ylabel('Driver')
-
-plt.title(
-    'Drivers Most Frequently Involved in Incidents'
-)
-
-plt.tight_layout()
-
-plt.show()
-
-### TEAMMATE COMPARISON PLOT ###
-
-season = 2021
-
-comparisonSeason = teammateComparison[
-    teammateComparison['year'] == season
-]
-
-plt.figure(figsize=(14, 8))
-
-sns.barplot(
-    data=comparisonSeason,
-    x='constructorName',
-    y='avgFinish',
-    hue='driver'
-)
-
-plt.title(f'Average Finish Position by Team - {season}')
-plt.xlabel('Constructor')
-plt.ylabel('Average Finish Position')
-
-# Lower finish position = better
-plt.gca().invert_yaxis()
-
-plt.xticks(rotation=45)
-
-plt.tight_layout()
-plt.show()
