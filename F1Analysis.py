@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import Analysis.visualisations as viz
 import Analysis.eda as eda
+import Analysis.ml as ml
 
 ### 1. DATA LOAD ###
 
@@ -388,3 +389,7 @@ viz.plot_all_visualizations(
 
     season=2021
 )
+
+##### MACHINE LEARNING
+
+ml.run_dnf_classification(df, edaResults)
