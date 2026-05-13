@@ -1,6 +1,3 @@
-import pandas as pd
-
-
 def run_eda(df, df_finished):
 
     print("=== GRID VS FINISH CORRELATION ===")
