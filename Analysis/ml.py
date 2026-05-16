@@ -227,6 +227,7 @@ def run_dnf_classification(
         'Histogram Gradient Boosting':
 
             HistGradientBoostingClassifier(
+                class_weight = 'balanced',
                 max_iter=300,
                 learning_rate=0.03,
                 max_depth=8,
